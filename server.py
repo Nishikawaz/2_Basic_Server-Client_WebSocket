@@ -40,15 +40,19 @@ def disconnect(socket_client):
         pass
     print(f"[SERVER] Cliente desconectado")
 
-# Función de mensaje masivo/broadcast 
+# Función de mensaje masivo/broadcast
 def broadcast(message, socket_sender, socket_server):
-    for socket in SOCKETS:
+    # Se itera sobre una COPIA de la lista: disconnect() hace SOCKETS.remove(),
+    # y mutar la lista mientras se la recorre saltea elementos silenciosamente.
+    for sock in list(SOCKETS):
         # No enviar al remitente ni al propio socket del servidor
-        if socket != socket_sender and socket != socket_server:
+        if sock != socket_sender and sock != socket_server:
             try:
-                socket.send(message)
-            except:
-                disconnect(socket)
+                # sendall y no send: send() puede escribir menos bytes de los pedidos
+                # y dejar el mensaje truncado del lado del receptor.
+                sock.sendall(message)
+            except OSError:
+                disconnect(sock)
 
 # Función de gestión de acciones del cliente
 def client_management(socket_client, socket_server):
@@ -78,18 +82,21 @@ def server_on(socket_server):
         while True:
             # Select monitorea qué socket tiene datos para leer
             ready, _, _ = select.select(SOCKETS, [], [])
-            for socket in ready:
-                if socket == socket_server:
+            for sock in ready:
+                if sock == socket_server:
                     accept_client(socket_server) # Si el socket evaluado de la lista es el server: se encarga de aceptar clientes
                 else:
-                    client_management(socket, socket_server) # Si el socket evaluado es un cliente, envía mensajes o gestiona la esconexión
+                    client_management(sock, socket_server) # Si el socket evaluado es un cliente, envía mensajes o gestiona la esconexión
 
     except KeyboardInterrupt:
         print("\n[SISTEMA] Apagando el servidor de forma manual")
     finally:
-        for socket in SOCKETS:
-            socket.close()
+        for sock in list(SOCKETS):
+            sock.close()
+        SOCKETS.clear()
 
-    # Se inicializa el server
+
+# Se inicializa el server
+if __name__ == "__main__":
     socket_server = setup_server(IP, PORT)
     server_on(socket_server)
