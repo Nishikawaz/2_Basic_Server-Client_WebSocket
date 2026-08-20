@@ -22,17 +22,24 @@ def client_connect():
     global socket_client
 
     while socket_client is None and not closing:
+        # Se trabaja sobre una variable local y recién se publica en la global
+        # DESPUÉS de que connect() haya salido bien. Si se asignara antes, el hilo
+        # principal vería socket_client != None y llamaría a sendall() sobre un
+        # socket todavía sin conectar.
+        nuevo_socket = None
         try:
-            socket_client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            socket_client.connect((IP, PORT))
+            nuevo_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            nuevo_socket.connect((IP, PORT))
+            socket_client = nuevo_socket
             print(f"[SISTEMA] Conectado al server: \nIP:{IP} \nPORT:{PORT}")
             return socket_client
-        except ConnectionRefusedError:
-            print(f"[SISTEMA] No se pudo conectar. Reintentando en {DELAY} segundos")
-            time.sleep(DELAY)
+        # ConnectionRefusedError es subclase de OSError, así que un solo handler alcanza
         except OSError:
+            # Cerrar el socket fallido: sin esto cada reintento filtra un descriptor
+            if nuevo_socket is not None:
+                nuevo_socket.close()
             if not closing:
-                print(f"No se pudo conectar. Reintentando en {DELAY} segundos")
+                print(f"[SISTEMA] No se pudo conectar. Reintentando en {DELAY} segundos")
                 time.sleep(DELAY)
 
 # Función de desconexión del cliente
